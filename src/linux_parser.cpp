@@ -105,13 +105,7 @@ long LinuxParser::UpTime() {
 
 // Done: Read and return the number of jiffies for the system
 long LinuxParser::Jiffies() {
-  vector<string> values = LinuxParser::CpuUtilization();
-  long totJiffies;
-  vector<CPUStates> keys = {kUser_, kNice_, kSystem_, kIdle_, kIOwait_, kIRQ_, kSoftIRQ_, kSteal_};
-  for (auto key : keys) {
-    totJiffies += stol(values[key]);
-  }
-  return totJiffies;
+  return LinuxParser::ActiveJiffies() + LinuxParser::IdleJiffies();
 }
 
 // Done: Read and return the number of active jiffies for a PID
@@ -127,7 +121,7 @@ long LinuxParser::ActiveJiffies(int pid) {
       values.push_back(value);
     }
   }
-  return stol(values[13]) + stol(values[14]); 
+  return stol(values[13]) + stol(values[14]) + stol(values[15]) + stol(values[16]); 
 }
 
 // Done: Read and return the number of active jiffies for the system
@@ -183,11 +177,13 @@ int LinuxParser::RunningProcesses() {
   string key, value, line;
   std::ifstream stream(kProcDirectory + kStatFilename);
   if (stream.is_open()) {
-    std::istringstream linestream(line);
-    while (linestream >> key >> value) {
-      if (key == "procs_running") {
-        return stoi(value);
-      }
+    while (std::getline(stream, line)) {
+      std::istringstream linestream(line);
+      while (linestream >> key >> value) {
+        if (key == "procs_running") {
+          return stoi(value);
+         }
+       }
     }
   }
   return 0; 
@@ -208,14 +204,14 @@ string LinuxParser::Command(int pid) {
 // REMOVE: [[maybe_unused]] once you define the function
 string LinuxParser::Ram(int pid) { 
   string key, value, line;
-  std::ifstream stream(kProcDirectory + to_string(pid) + kStatFilename);
+  std::ifstream stream(kProcDirectory + to_string(pid) + kStatusFilename);
   if (stream.is_open()) {
     while (std::getline(stream, line)) {
       std::istringstream linestream(line);
       while (linestream >> key) {
         if (key == "VmSize:") {
           linestream >> value;
-          return to_string(stol(value) / 1024);
+          return to_string(stol(value) / 1000);
         }
       }
     }
@@ -274,5 +270,5 @@ long LinuxParser::UpTime(int pid) {
       values.push_back(value);
     }
   }
-  return LinuxParser::UpTime() - (stol(values[21]) / 100); 
+  return LinuxParser::UpTime() - stol(values[21]) / sysconf(_SC_CLK_TCK); 
 }
